@@ -42,6 +42,7 @@ const messageSchema = new mongoose.Schema({
   ],
 
   queryExpanded: String,
+  followUpQuestions: [String],
 
   retrievalStats: {
     pubmedCount: Number,

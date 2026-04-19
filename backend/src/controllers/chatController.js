@@ -14,6 +14,7 @@ import {
 } from '../services/ranker.js';
 
 import { generateResponse, checkHuggingFaceHealth } from '../services/llm.js';
+import { generateFollowUpQuestions } from '../services/followUps.js';
 
 import { getCached, setCached } from '../services/cache.js';
 
@@ -106,6 +107,11 @@ export async function sendMessage(req, res, next) {
 
     // 7. Generate AI response
     const llmResult = await generateResponse(parsedQuery, snippets, history);
+    const followUpQuestions = generateFollowUpQuestions(
+      parsedQuery,
+      rankedPubs,
+      rankedTrials,
+    );
 
     // 8. Build source attribution
     const sources = [
@@ -156,6 +162,7 @@ export async function sendMessage(req, res, next) {
       timestamp: new Date(),
       sources,
       queryExpanded: parsedQuery.expandedQuery,
+      followUpQuestions,
 
       retrievalStats: {
         pubmedCount: rawResults.publications.filter(
@@ -199,6 +206,7 @@ export async function sendMessage(req, res, next) {
         sources,
 
         queryExpanded: parsedQuery.expandedQuery,
+        followUpQuestions,
 
         parsedQuery: {
           disease: parsedQuery.disease,

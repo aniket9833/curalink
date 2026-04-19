@@ -162,7 +162,15 @@ export default function App() {
           ) : (
             <>
               {messages.map((msg) => (
-                <Message key={msg.id} message={msg} chatTitle={chatTitle} />
+                <Message
+                  key={msg.id}
+                  message={msg}
+                  chatTitle={chatTitle}
+                  onFollowUpSend={(question) => {
+                    closeMobilePanels();
+                    sendMessage(question);
+                  }}
+                />
               ))}
 
               {isLoading && <TypingIndicator step={pipelineStep} />}

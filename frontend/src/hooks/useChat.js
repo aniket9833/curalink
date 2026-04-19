@@ -74,6 +74,7 @@ export function useChat() {
           timestamp: m.timestamp,
           sources: m.sources || [],
           queryExpanded: m.queryExpanded,
+          followUpQuestions: m.followUpQuestions || [],
           retrievalStats: m.retrievalStats,
         })),
       );
@@ -153,6 +154,7 @@ export function useChat() {
           timestamp: new Date().toISOString(),
           sources: data.response.sources || [],
           queryExpanded: data.response.queryExpanded,
+          followUpQuestions: data.response.followUpQuestions || [],
           retrievalStats: data.response.retrievalStats,
           model: data.response.model,
           aiAvailable: data.response.aiAvailable,

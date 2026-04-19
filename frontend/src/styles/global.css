@@ -978,6 +978,55 @@ body::before {
   color: var(--accent-secondary);
 }
 
+.follow-up-panel {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.follow-up-label {
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.follow-up-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.follow-up-chip {
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  background: linear-gradient(
+    135deg,
+    rgba(56, 189, 248, 0.08),
+    rgba(167, 139, 250, 0.08)
+  );
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: var(--transition);
+  text-align: left;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  max-width: 100%;
+}
+
+.follow-up-chip:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  background: linear-gradient(
+    135deg,
+    rgba(56, 189, 248, 0.16),
+    rgba(167, 139, 250, 0.14)
+  );
+  transform: translateY(-1px);
+}
+
 .trial-status {
   font-size: 0.65rem;
   padding: 2px 8px;
@@ -1426,6 +1475,11 @@ body::before {
 
   .sample-chip {
     width: 100%;
+  }
+
+  .follow-up-chip {
+    width: 100%;
+    border-radius: var(--radius-md);
   }
 
   .input-area {

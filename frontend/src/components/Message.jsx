@@ -48,7 +48,28 @@ function RetrievalStats({ stats }) {
   );
 }
 
-export default function Message({ message, chatTitle }) {
+function FollowUpQuestions({ questions, onSend }) {
+  if (!questions?.length || !onSend) return null;
+
+  return (
+    <div className="follow-up-panel">
+      <div className="follow-up-label">Suggested follow-up questions</div>
+      <div className="follow-up-list">
+        {questions.map((question) => (
+          <button
+            key={question}
+            className="follow-up-chip"
+            onClick={() => onSend(question)}
+          >
+            {question}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function Message({ message, chatTitle, onFollowUpSend }) {
   const isUser = message.role === 'user';
 
   const handleExport = () => {
@@ -122,6 +143,11 @@ export default function Message({ message, chatTitle }) {
             <SourcesPanel
               sources={message.sources}
               retrievalStats={message.retrievalStats}
+            />
+
+            <FollowUpQuestions
+              questions={message.followUpQuestions}
+              onSend={onFollowUpSend}
             />
           </>
         )}
