@@ -5,19 +5,23 @@
 
 import axios from 'axios';
 import xml2js from 'xml2js';
+import {
+  RETRIEVAL_SOURCES,
+  HTTP_TIMEOUT,
+  RETRIEVAL_LIMITS,
+} from '../config/constants.js';
+import logger from '../utils/logger.js';
 
-const BASE_URLS = {
-  pubmed_search: 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi',
-  pubmed_fetch: 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi',
-  openalex: 'https://api.openalex.org/works',
-  trials: 'https://clinicaltrials.gov/api/v2/studies',
-};
-
-const httpClient = axios.create({ timeout: 20000 });
+const BASE_URLS = RETRIEVAL_SOURCES;
+const httpClient = axios.create({ timeout: HTTP_TIMEOUT });
 
 // PubMed
 
-export async function fetchPubMed(query, disease, maxResults = 80) {
+export async function fetchPubMed(
+  query,
+  disease,
+  maxResults = RETRIEVAL_LIMITS.pubmedMaxResults,
+) {
   try {
     // Step 1: search for IDs
     const searchRes = await httpClient.get(BASE_URLS.pubmed_search, {
@@ -33,10 +37,14 @@ export async function fetchPubMed(query, disease, maxResults = 80) {
     const ids = searchRes.data?.esearchresult?.idlist || [];
     if (ids.length === 0) return [];
 
-    // Step 2: fetch details in batches of 20
+    // Step 2: fetch details in batches
     const batches = [];
-    for (let i = 0; i < Math.min(ids.length, 60); i += 20) {
-      batches.push(ids.slice(i, i + 20));
+    for (
+      let i = 0;
+      i < Math.min(ids.length, RETRIEVAL_LIMITS.pubmedMaxFetch);
+      i += RETRIEVAL_LIMITS.pubmedBatchSize
+    ) {
+      batches.push(ids.slice(i, i + RETRIEVAL_LIMITS.pubmedBatchSize));
     }
 
     const allArticles = [];

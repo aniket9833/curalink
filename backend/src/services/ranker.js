@@ -3,6 +3,8 @@
  * Scores and ranks publications and trials for relevance
  */
 
+import { RANKING_CONFIG } from '../config/constants.js';
+
 const CURRENT_YEAR = new Date().getFullYear();
 
 // Text similarity (TF-IDF inspired simple scoring)
@@ -49,33 +51,45 @@ export function rankPublications(publications, parsedQuery) {
     let score = 0;
 
     // 1. Relevance score (title weighted 3x, abstract 1x)
-    const titleScore = textSimilarity(queryTokens, pub.title) * 3;
+    const titleScore =
+      textSimilarity(queryTokens, pub.title) *
+      RANKING_CONFIG.titleWeightMultiplier;
     const abstractScore = textSimilarity(queryTokens, pub.abstract);
     score += titleScore + abstractScore;
 
-    // 2. Recency bonus (max 2 points, linear decay)
+    // 2. Recency bonus (configurable max, linear decay)
     const year = parseInt(pub.year) || 2000;
     const age = CURRENT_YEAR - year;
-    score += Math.max(0, 2 - age * 0.15);
+    score += Math.max(
+      0,
+      RANKING_CONFIG.recencyMaxBonus - age * RANKING_CONFIG.recencyDecayRate,
+    );
 
-    // 3. Citation count bonus (log scale, capped at 2)
+    // 3. Citation count bonus (log scale, capped)
     if (pub.citationCount > 0) {
-      score += Math.min(2, Math.log10(pub.citationCount + 1));
+      score += Math.min(
+        RANKING_CONFIG.citationMaxBonus,
+        Math.log10(pub.citationCount + 1),
+      );
     }
 
     // 4. Source credibility boost
-    if (pub.source === 'PubMed') score += 0.5;
+    if (pub.source === 'PubMed') score += RANKING_CONFIG.sourceCredibilityBonus;
 
     // 5. Open access bonus
-    if (pub.openAccess) score += 0.2;
+    if (pub.openAccess) score += RANKING_CONFIG.openAccessBonus;
 
     // 6. Disease specificity — heavy bonus if disease in title
     if (disease && pub.title.toLowerCase().includes(disease.toLowerCase())) {
-      score += 2;
+      score += RANKING_CONFIG.diseaseSpecificityBonus;
     }
 
     // 7. Abstract quality (longer = more info)
-    if (pub.abstract && pub.abstract.length > 200) score += 0.3;
+    if (
+      pub.abstract &&
+      pub.abstract.length > RANKING_CONFIG.abstractQualityMinLength
+    )
+      score += RANKING_CONFIG.abstractQualityBonus;
 
     return { ...pub, relevanceScore: Math.round(score * 100) / 100 };
   });
@@ -94,7 +108,7 @@ export function rankPublications(publications, parsedQuery) {
     }
   }
 
-  return deduped.slice(0, 8);
+  return deduped.slice(0, RANKING_CONFIG.publicationsDisplayLimit);
 }
 
 // Trial Ranker

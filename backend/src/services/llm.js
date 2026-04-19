@@ -4,39 +4,18 @@
  */
 
 import axios from 'axios';
+import config from '../config/env.js';
+import { LLM_CONFIG } from '../config/constants.js';
+import logger from '../utils/logger.js';
 
-const OLLAMA_BASE = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
+const OLLAMA_BASE = config.ollama.baseUrl;
+const OLLAMA_MODEL = config.ollama.model;
 
 /**
  * Build structured prompt for the LLM
  */
 function buildSystemPrompt() {
-  return `You are Curalink, an expert AI medical research assistant. Your role is to analyze medical research literature and clinical trials to provide structured, evidence-based insights.
-
-CRITICAL RULES:
-- Always cite specific papers and trials from the provided context
-- Never fabricate studies, statistics, or medical facts
-- Clearly distinguish between established research and emerging evidence
-- Include appropriate medical disclaimers
-- Structure your response in clear sections
-- Be personalized based on the user's specific condition and context
-
-RESPONSE FORMAT (use exactly these section headers):
-## Condition Overview
-Brief overview of the condition/topic relevant to the query.
-
-## Key Research Insights
-Synthesized insights from the provided publications (cite each one).
-
-## Clinical Trial Opportunities
-Summary of relevant clinical trials and what they mean for patients.
-
-## Personalized Recommendations
-Evidence-based suggestions tailored to the specific query context.
-
-## Important Disclaimer
-Always include: "This information is for educational purposes only. Consult qualified healthcare professionals for medical advice."`;
+  return LLM_CONFIG.systemPrompt;
 }
 
 export function buildUserPrompt(parsedQuery, snippets, conversationHistory) {
@@ -56,7 +35,7 @@ export function buildUserPrompt(parsedQuery, snippets, conversationHistory) {
   const historyContext =
     conversationHistory.length > 0
       ? `\n\nPREVIOUS CONVERSATION CONTEXT:\n${conversationHistory
-          .slice(-4)
+          .slice(-LLM_CONFIG.conversationContextLimit)
           .map(
             (m) =>
               `${m.role === 'user' ? 'User' : 'Curalink'}: ${m.content.slice(0, 200)}`,
@@ -136,7 +115,9 @@ async function callOllama(prompt, systemPrompt, streamCallback = null) {
               streamCallback(parsed.response, false);
             }
             if (parsed.done) streamCallback('', true);
-          } catch (_) {}
+          } catch (_) {
+            // JSON parsing error, skip malformed chunk
+          }
         }
       }
       return fullText;
@@ -157,10 +138,13 @@ async function callOllama(prompt, systemPrompt, streamCallback = null) {
     }
   } catch (err) {
     if (err.code === 'ECONNREFUSED') {
-      throw new Error(
-        'Ollama is not running. Please start Ollama with: ollama serve',
-      );
+      logger.error('Ollama is not running', {
+        message: 'Please start Ollama with: ollama serve',
+        baseUrl: OLLAMA_BASE,
+      });
+      throw err;
     }
+    logger.error('Ollama API error:', err.message);
     throw err;
   }
 }

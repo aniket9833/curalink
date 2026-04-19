@@ -1,64 +1,63 @@
-import dotenv from 'dotenv';
-dotenv.config();
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import morgan from 'morgan';
-import mongoose from 'mongoose';
-import rateLimit from 'express-rate-limit';
+/**
+ * Curalink Backend Server
+ * Entry point - Initializes app, connects to DB, and starts the server
+ */
 
+import config from './config/env.js';
+import { connectDB } from './config/database.js';
+import { setupApp, setupRoutes } from './config/server.js';
+import logger from './utils/logger.js';
+
+// Import route handlers
 import chatRoutes from './routes/chat.js';
 import searchRoutes from './routes/search.js';
 import userRoutes from './routes/user.js';
 
-const app = express();
-const PORT = process.env.PORT || 5000;
+async function startServer() {
+  try {
+    // 1. Connect to MongoDB
+    await connectDB();
 
-// Security & middleware
-app.use(helmet());
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true,
-  }),
-);
-app.use(morgan('dev'));
-app.use(express.json({ limit: '10mb' }));
+    // 2. Initialize Express app
+    const app = setupApp();
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { error: 'Too many requests, please try again later.' },
-});
-app.use('/api/', limiter);
+    // 3. Setup routes
+    const routes = {
+      '/chat': chatRoutes,
+      '/search': searchRoutes,
+      '/user': userRoutes,
+    };
+    setupRoutes(app, routes);
 
-// MongoDB connection
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => console.log('MongoDB connected'))
-  .catch((err) => console.error('MongoDB connection error:', err));
+    // 4. Start listening
+    const server = app.listen(config.port, () => {
+      logger.info(
+        `🚀 Curalink server running on http://localhost:${config.port}`,
+      );
+      logger.info(`Environment: ${config.nodeEnv}`);
+    });
 
-// Routes
-app.use('/api/chat', chatRoutes);
-app.use('/api/search', searchRoutes);
-app.use('/api/user', userRoutes);
+    // 5. Graceful shutdown
+    const gracefulShutdown = async () => {
+      logger.info('Shutting down gracefully...');
+      server.close(async () => {
+        logger.info('Server closed');
+        process.exit(0);
+      });
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+      // Force shutdown after 10 seconds
+      setTimeout(() => {
+        logger.error('Force shutdown after timeout');
+        process.exit(1);
+      }, 10000);
+    };
 
-// Error handler
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res
-    .status(500)
-    .json({ error: 'Internal server error', message: err.message });
-});
+    process.on('SIGINT', gracefulShutdown);
+    process.on('SIGTERM', gracefulShutdown);
+  } catch (error) {
+    logger.error('Failed to start server:', error.message);
+    process.exit(1);
+  }
+}
 
-app.listen(PORT, () => {
-  console.log(`🚀 Curalink server running on http://localhost:${PORT}`);
-});
-
-export default app;
+startServer();

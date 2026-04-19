@@ -18,21 +18,22 @@ import { generateResponse, checkOllamaHealth } from '../services/llm.js';
 import { getCached, setCached } from '../services/cache.js';
 
 import { Chat, Search } from '../models/index.js';
+import logger from '../utils/logger.js';
+import { validateMessage, validateSessionId } from '../utils/validation.js';
+import { AppError } from '../utils/errorHandler.js';
 
 // POST /api/chat/message
 
-export async function sendMessage(req, res) {
-  const { sessionId, message, chatId, medicalContext = {} } = req.body;
-
-  if (!message?.trim()) {
-    return res.status(400).json({
-      error: 'Message is required',
-    });
-  }
-
-  const sid = sessionId || uuidv4();
-
+export async function sendMessage(req, res, next) {
   try {
+    const { sessionId, message, chatId, medicalContext = {} } = req.body;
+
+    // Validate input
+    validateMessage(message);
+    validateSessionId(sessionId);
+
+    const sid = sessionId || uuidv4();
+
     // 1. Load or create chat
     let chat = chatId ? await Chat.findById(chatId) : null;
 
@@ -68,7 +69,7 @@ export async function sendMessage(req, res) {
       patientName: medicalContext.patientName,
     });
 
-    console.log('🧠 Parsed query:', {
+    logger.debug('Parsed query:', {
       disease: parsedQuery.disease,
       intents: parsedQuery.intents,
       expanded: parsedQuery.expandedQuery?.slice(0, 80),
@@ -95,9 +96,10 @@ export async function sendMessage(req, res) {
 
     const rankedTrials = rankTrials(rawResults.trials, parsedQuery);
 
-    console.log(
-      `📊 Ranked: ${rankedPubs.length} papers, ${rankedTrials.length} trials`,
-    );
+    logger.info('Ranked results:', {
+      publications: rankedPubs.length,
+      trials: rankedTrials.length,
+    });
 
     // 6. Extract snippets for LLM context
     const snippets = extractSnippets(rankedPubs, rankedTrials);
@@ -182,7 +184,9 @@ export async function sendMessage(req, res) {
       disease: parsedQuery.disease,
       location: parsedQuery.location,
       resultsCount: sources.length,
-    }).catch(() => {});
+    }).catch(() => {
+      // Fail silently if search logging fails
+    });
 
     // 11. Return structured response
     return res.json({
@@ -210,20 +214,18 @@ export async function sendMessage(req, res) {
       },
     });
   } catch (err) {
-    console.error('Chat error:', err);
-
-    return res.status(500).json({
-      error: 'Failed to process query',
-      message: err.message,
-    });
+    logger.error('Chat message error:', err.message);
+    next(err);
   }
 }
 
 // GET /api/chat/history/:sessionId
 
-export async function getChatHistory(req, res) {
+export async function getChatHistory(req, res, next) {
   try {
     const { sessionId } = req.params;
+
+    validateSessionId(sessionId);
 
     const chats = await Chat.find({
       sessionId,
@@ -234,57 +236,59 @@ export async function getChatHistory(req, res) {
       })
       .limit(20);
 
-    res.json({ chats });
+    res.json({ success: true, chats });
   } catch (err) {
-    res.status(500).json({
-      error: err.message,
-    });
+    logger.error('Get chat history error:', err.message);
+    next(err);
   }
 }
 
 // GET /api/chat/:chatId
 
-export async function getChat(req, res) {
+export async function getChat(req, res, next) {
   try {
     const chat = await Chat.findById(req.params.chatId);
 
     if (!chat) {
-      return res.status(404).json({
-        error: 'Chat not found',
-      });
+      throw new AppError('Chat not found', 404);
     }
 
-    res.json({ chat });
+    res.json({ success: true, chat });
   } catch (err) {
-    res.status(500).json({
-      error: err.message,
-    });
+    logger.error('Get chat error:', err.message);
+    next(err);
   }
 }
 
 // DELETE /api/chat/:chatId
 
-export async function deleteChat(req, res) {
+export async function deleteChat(req, res, next) {
   try {
     await Chat.findByIdAndDelete(req.params.chatId);
 
+    logger.info('Chat deleted:', req.params.chatId);
     res.json({
       success: true,
     });
   } catch (err) {
-    res.status(500).json({
-      error: err.message,
-    });
+    logger.error('Delete chat error:', err.message);
+    next(err);
   }
 }
 
 // GET /api/chat/health
 
-export async function getHealth(req, res) {
-  const ollamaStatus = await checkOllamaHealth();
+export async function getHealth(req, res, next) {
+  try {
+    const ollamaStatus = await checkOllamaHealth();
 
-  res.json({
-    status: 'ok',
-    ollama: ollamaStatus,
-  });
+    res.json({
+      success: true,
+      status: 'ok',
+      ollama: ollamaStatus,
+    });
+  } catch (err) {
+    logger.error('Health check error:', err.message);
+    next(err);
+  }
 }

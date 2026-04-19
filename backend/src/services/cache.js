@@ -1,16 +1,18 @@
 import NodeCache from 'node-cache';
 import crypto from 'crypto';
 import { CachedResearch } from '../models/index.js';
+import { CACHE_CONFIG } from '../config/constants.js';
+import logger from '../utils/logger.js';
 
 /**
  * Caching Service
  * In-memory + MongoDB caching for research results
  */
 
-// In-memory cache: 30 minutes TTL
+// In-memory cache: configurable TTL
 const memCache = new NodeCache({
-  stdTTL: 1800,
-  checkperiod: 120,
+  stdTTL: CACHE_CONFIG.memoryTTL,
+  checkperiod: CACHE_CONFIG.memoryCheckPeriod,
 });
 
 function hashQuery(query, disease) {
@@ -31,7 +33,7 @@ export async function getCached(query, disease) {
   const mem = memCache.get(key);
 
   if (mem) {
-    console.log('🎯 Cache hit (memory):', key.slice(0, 8));
+    logger.debug('Cache hit (memory):', { key: key.slice(0, 8) });
     return mem;
   }
 
@@ -43,7 +45,7 @@ export async function getCached(query, disease) {
     });
 
     if (db) {
-      console.log('🎯 Cache hit (MongoDB):', key.slice(0, 8));
+      logger.debug('Cache hit (MongoDB):', { key: key.slice(0, 8) });
 
       const data = {
         publications: db.publications,
@@ -55,7 +57,7 @@ export async function getCached(query, disease) {
       return data;
     }
   } catch (err) {
-    console.warn('Cache DB read error:', err.message);
+    logger.warn('Cache DB read error:', err.message);
   }
 
   return null;
@@ -77,7 +79,7 @@ export async function setCached(query, disease, data) {
         publications: data.publications,
         trials: data.trials,
         fetchedAt: new Date(),
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + CACHE_CONFIG.mongoDBTTL),
       },
       {
         upsert: true,
