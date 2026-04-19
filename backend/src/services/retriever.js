@@ -24,7 +24,7 @@ export async function fetchPubMed(
 ) {
   try {
     // Step 1: search for IDs
-    const searchRes = await httpClient.get(BASE_URLS.pubmed_search, {
+    const searchRes = await httpClient.get(BASE_URLS.pubmedSearch, {
       params: {
         db: 'pubmed',
         term: query,
@@ -50,7 +50,7 @@ export async function fetchPubMed(
     const allArticles = [];
     for (const batch of batches) {
       try {
-        const fetchRes = await httpClient.get(BASE_URLS.pubmed_fetch, {
+        const fetchRes = await httpClient.get(BASE_URLS.pubmedFetch, {
           params: {
             db: 'pubmed',
             id: batch.join(','),

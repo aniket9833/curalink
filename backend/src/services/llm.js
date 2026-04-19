@@ -1,15 +1,23 @@
 /**
- * Ollama LLM Service
- * Handles AI reasoning and response generation using local open-source models
+ * Hugging Face LLM Service
+ * Handles AI reasoning and response generation using Hugging Face inference API
  */
 
 import axios from 'axios';
-import config from '../config/env.js';
 import { LLM_CONFIG } from '../config/constants.js';
+import config from '../config/env.js';
 import logger from '../utils/logger.js';
 
-const OLLAMA_BASE = config.ollama.baseUrl;
-const OLLAMA_MODEL = config.ollama.model;
+const HF_CHAT_COMPLETIONS_URL =
+  'https://router.huggingface.co/v1/chat/completions';
+const HF_MODEL_INFO_URL = 'https://huggingface.co/api/models';
+
+function getHuggingFaceConfig() {
+  return {
+    model: config.huggingFace.model,
+    token: config.huggingFace.token,
+  };
+}
 
 /**
  * Build structured prompt for the LLM
@@ -82,87 +90,101 @@ Please provide a comprehensive, personalized, evidence-based response using ONLY
 }
 
 /**
- * Call Ollama API
+ * Call Hugging Face Inference API
  */
-async function callOllama(prompt, systemPrompt, streamCallback = null) {
+async function callHuggingFace(prompt, systemPrompt, streamCallback = null) {
   try {
-    if (streamCallback) {
-      // Streaming mode
-      const response = await axios.post(
-        `${OLLAMA_BASE}/api/generate`,
-        {
-          model: OLLAMA_MODEL,
-          prompt,
-          system: systemPrompt,
-          stream: true,
-          options: {
-            temperature: 0.3,
-            top_p: 0.9,
-            num_predict: 2048,
-          },
-        },
-        { responseType: 'stream' },
-      );
+    const { model, token } = getHuggingFaceConfig();
 
-      let fullText = '';
-      for await (const chunk of response.data) {
-        const lines = chunk.toString().split('\n').filter(Boolean);
-        for (const line of lines) {
-          try {
-            const parsed = JSON.parse(line);
-            if (parsed.response) {
-              fullText += parsed.response;
-              streamCallback(parsed.response, false);
-            }
-            if (parsed.done) streamCallback('', true);
-          } catch (_) {
-            // JSON parsing error, skip malformed chunk
-          }
-        }
-      }
-      return fullText;
-    } else {
-      // Non-streaming
-      const response = await axios.post(`${OLLAMA_BASE}/api/generate`, {
-        model: OLLAMA_MODEL,
-        prompt,
-        system: systemPrompt,
-        stream: false,
-        options: {
-          temperature: 0.3,
-          top_p: 0.9,
-          num_predict: 2048,
-        },
-      });
-      return response.data.response || '';
+    if (!token) {
+      throw new Error('HF_TOKEN not configured');
     }
+
+    const response = await axios.post(
+      HF_CHAT_COMPLETIONS_URL,
+      {
+        model,
+        messages: [
+          ...(systemPrompt
+            ? [{ role: 'system', content: systemPrompt }]
+            : []),
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 2048,
+        temperature: 0.3,
+        top_p: 0.9,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 60000,
+      },
+    );
+
+    const text = response.data?.choices?.[0]?.message?.content || '';
+    if (streamCallback) {
+      streamCallback(text, false);
+      streamCallback('', true);
+    }
+    return text;
   } catch (err) {
-    if (err.code === 'ECONNREFUSED') {
-      logger.error('Ollama is not running', {
-        message: 'Please start Ollama with: ollama serve',
-        baseUrl: OLLAMA_BASE,
+    if (err.code === 'ECONNREFUSED' || err.message.includes('ENOTFOUND')) {
+      logger.error('Hugging Face API is unreachable', {
+        message: 'Please check your internet connection and HF_TOKEN',
+        model: getHuggingFaceConfig().model,
       });
       throw err;
     }
-    logger.error('Ollama API error:', err.message);
+    if (err.response?.status === 401 || err.response?.status === 403) {
+      logger.error('Hugging Face authentication failed', {
+        message: 'Invalid HF_TOKEN',
+      });
+      throw err;
+    }
+    logger.error('Hugging Face API error:', err.message);
     throw err;
   }
 }
 
 /**
- * Check if Ollama is available
+ * Check if Hugging Face API is available
  */
-export async function checkOllamaHealth() {
+export async function checkHuggingFaceHealth() {
   try {
-    const res = await axios.get(`${OLLAMA_BASE}/api/tags`, { timeout: 3000 });
-    const models = res.data?.models || [];
+    const { model, token } = getHuggingFaceConfig();
+
+    if (!token) {
+      return {
+        available: false,
+        currentModel: model,
+        error: 'HF_TOKEN not configured',
+      };
+    }
+    const res = await axios.get(
+      `${HF_MODEL_INFO_URL}/${model}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        timeout: 5000,
+      },
+    );
     return {
       available: true,
-      models: models.map((m) => m.name),
-      currentModel: OLLAMA_MODEL,
+      currentModel: model,
+      modelInfo: res.data?.id || model,
     };
-  } catch (_) {
-    return { available: false, models: [], currentModel: OLLAMA_MODEL };
+  } catch (error) {
+    return {
+      available: false,
+      currentModel: getHuggingFaceConfig().model,
+      error:
+        error.response?.data?.error ||
+        error.message ||
+        'Unable to reach Hugging Face',
+    };
   }
 }
 
@@ -183,13 +205,21 @@ export async function generateResponse(
   );
 
   try {
-    const response = await callOllama(userPrompt, systemPrompt, streamCallback);
-    return { success: true, content: response, model: OLLAMA_MODEL };
+    const response = await callHuggingFace(
+      userPrompt,
+      systemPrompt,
+      streamCallback,
+    );
+    return {
+      success: true,
+      content: response,
+      model: getHuggingFaceConfig().model,
+    };
   } catch (err) {
     console.error('LLM generation error:', err.message);
 
-    // Fallback response when Ollama is unavailable
-    if (err.message.includes('Ollama is not running')) {
+    // Fallback response when Hugging Face API is unavailable
+    if (err.message.includes('Hugging Face') || err.response?.status === 503) {
       const fallback = generateFallbackResponse(parsedQuery, snippets);
       return {
         success: false,
@@ -203,7 +233,7 @@ export async function generateResponse(
 }
 
 /**
- * Fallback response when Ollama is unavailable
+ * Fallback response when Hugging Face API is unavailable
  */
 function generateFallbackResponse(parsedQuery, snippets) {
   const { originalQuery, disease, intents } = parsedQuery;
@@ -213,7 +243,7 @@ function generateFallbackResponse(parsedQuery, snippets) {
   return `## Condition Overview
 Research results for: **${disease || originalQuery}**
 
-*Note: AI reasoning is currently unavailable (Ollama not running). Showing curated research results.*
+*Note: AI reasoning is currently unavailable (Hugging Face API not accessible). Showing curated research results.*
 
 ## Key Research Insights
 ${
@@ -242,5 +272,5 @@ ${
 }
 
 ## Important Disclaimer
-This information is for educational purposes only. Consult qualified healthcare professionals for medical advice. To enable AI-powered analysis, please ensure Ollama is running: \`ollama serve\` and \`ollama pull llama3.2\`.`;
+This information is for educational purposes only. Consult qualified healthcare professionals for medical advice. To enable AI-powered analysis, ensure HF_TOKEN and HF_MODEL environment variables are properly configured.`;
 }

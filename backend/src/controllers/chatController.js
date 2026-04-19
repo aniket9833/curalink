@@ -13,7 +13,7 @@ import {
   extractSnippets,
 } from '../services/ranker.js';
 
-import { generateResponse, checkOllamaHealth } from '../services/llm.js';
+import { generateResponse, checkHuggingFaceHealth } from '../services/llm.js';
 
 import { getCached, setCached } from '../services/cache.js';
 
@@ -215,7 +215,7 @@ export async function sendMessage(req, res, next) {
     });
   } catch (err) {
     logger.error('Chat message error:', err.message);
-    next(err);
+    throw err;
   }
 }
 
@@ -239,7 +239,7 @@ export async function getChatHistory(req, res, next) {
     res.json({ success: true, chats });
   } catch (err) {
     logger.error('Get chat history error:', err.message);
-    next(err);
+    throw err;
   }
 }
 
@@ -256,7 +256,7 @@ export async function getChat(req, res, next) {
     res.json({ success: true, chat });
   } catch (err) {
     logger.error('Get chat error:', err.message);
-    next(err);
+    throw err;
   }
 }
 
@@ -272,7 +272,7 @@ export async function deleteChat(req, res, next) {
     });
   } catch (err) {
     logger.error('Delete chat error:', err.message);
-    next(err);
+    throw err;
   }
 }
 
@@ -280,15 +280,15 @@ export async function deleteChat(req, res, next) {
 
 export async function getHealth(req, res, next) {
   try {
-    const ollamaStatus = await checkOllamaHealth();
+    const huggingFaceStatus = await checkHuggingFaceHealth();
 
     res.json({
       success: true,
       status: 'ok',
-      ollama: ollamaStatus,
+      huggingface: huggingFaceStatus,
     });
   } catch (err) {
     logger.error('Health check error:', err.message);
-    next(err);
+    throw err;
   }
 }

@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { Download, Trash2 } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import { Download, Menu, PanelRightOpen, Trash2, X } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import Message from './components/Message';
 import TypingIndicator from './components/TypingIndicator';
@@ -11,6 +11,8 @@ import { exportResponseToPDF } from './utils/exportPDF';
 import './styles/global.css';
 
 export default function App() {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isContextOpen, setIsContextOpen] = useState(false);
   const {
     chats,
     currentChatId,
@@ -18,7 +20,7 @@ export default function App() {
     isLoading,
     pipelineStep,
     error,
-    ollamaStatus,
+    huggingFaceStatus,
     medicalContext,
     setMedicalContext,
     lastQueryInfo,
@@ -37,8 +39,29 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
+  const closeMobilePanels = () => {
+    setIsSidebarOpen(false);
+    setIsContextOpen(false);
+  };
+
+  const handleNewChat = () => {
+    closeMobilePanels();
+    newChat();
+  };
+
+  const handleLoadChat = (chatId) => {
+    closeMobilePanels();
+    loadChat(chatId);
+  };
+
+  const handleDeleteChat = (chatId) => {
+    closeMobilePanels();
+    deleteChat(chatId);
+  };
+
   // Handle welcome screen send (with context)
   const handleWelcomeSend = (query, ctx) => {
+    closeMobilePanels();
     if (ctx && Object.keys(ctx).length > 0) {
       setMedicalContext(ctx);
     }
@@ -56,21 +79,50 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar
-        chats={chats}
-        currentChatId={currentChatId}
-        onNewChat={newChat}
-        onLoadChat={loadChat}
-        onDeleteChat={deleteChat}
-        ollamaStatus={ollamaStatus}
+      <div
+        className={`mobile-overlay ${isSidebarOpen || isContextOpen ? 'visible' : ''}`}
+        onClick={() => {
+          setIsSidebarOpen(false);
+          setIsContextOpen(false);
+        }}
       />
+
+      <div className={`sidebar-shell ${isSidebarOpen ? 'open' : ''}`}>
+        <div className="drawer-header mobile-only">
+          <span className="drawer-title">Sessions</span>
+          <button
+            className="icon-btn"
+            onClick={() => setIsSidebarOpen(false)}
+            title="Close sessions"
+          >
+            <X size={14} />
+          </button>
+        </div>
+        <Sidebar
+          chats={chats}
+          currentChatId={currentChatId}
+          onNewChat={handleNewChat}
+          onLoadChat={handleLoadChat}
+          onDeleteChat={handleDeleteChat}
+          huggingFaceStatus={huggingFaceStatus}
+        />
+      </div>
 
       <main className="main">
         {/* Header */}
         <div className="chat-header">
-          <span className="chat-header-title">
-            {showWelcome ? 'Welcome to Curalink' : chatTitle}
-          </span>
+          <div className="header-leading">
+            <button
+              className="icon-btn mobile-only"
+              onClick={() => setIsSidebarOpen(true)}
+              title="Open sessions"
+            >
+              <Menu size={16} />
+            </button>
+            <span className="chat-header-title">
+              {showWelcome ? 'Welcome to Curalink' : chatTitle}
+            </span>
+          </div>
           <div className="header-actions">
             {!showWelcome && messages.some((m) => m.role === 'assistant') && (
               <button
@@ -82,10 +134,21 @@ export default function App() {
               </button>
             )}
             {currentChatId && (
-              <button className="icon-btn" onClick={newChat} title="New chat">
+              <button
+                className="icon-btn"
+                onClick={handleNewChat}
+                title="New chat"
+              >
                 <Trash2 size={14} />
               </button>
             )}
+            <button
+              className="icon-btn mobile-only"
+              onClick={() => setIsContextOpen(true)}
+              title="Open context"
+            >
+              <PanelRightOpen size={16} />
+            </button>
           </div>
         </div>
 
@@ -107,11 +170,11 @@ export default function App() {
               {error && (
                 <div className="error-msg">
                   ⚠️ {error}
-                  {error.includes('Ollama') && (
+                  {error.includes('Hugging Face') && (
                     <div
                       style={{ marginTop: 6, fontSize: '0.8rem', opacity: 0.8 }}
                     >
-                      Run:{' '}
+                      Ensure{' '}
                       <code
                         style={{
                           background: 'rgba(251,113,133,0.15)',
@@ -119,18 +182,9 @@ export default function App() {
                           borderRadius: 3,
                         }}
                       >
-                        ollama serve
+                        HF_TOKEN
                       </code>{' '}
-                      and{' '}
-                      <code
-                        style={{
-                          background: 'rgba(251,113,133,0.15)',
-                          padding: '1px 6px',
-                          borderRadius: 3,
-                        }}
-                      >
-                        ollama pull llama3.2
-                      </code>
+                      environment variable is set
                     </div>
                   )}
                 </div>
@@ -142,16 +196,31 @@ export default function App() {
 
         {/* Input */}
         <ChatInput
-          onSend={(msg) => sendMessage(msg)}
+          onSend={(msg) => {
+            closeMobilePanels();
+            sendMessage(msg);
+          }}
           isLoading={isLoading}
           disabled={false}
         />
       </main>
 
-      <ContextPanel
-        medicalContext={medicalContext}
-        lastQueryInfo={lastQueryInfo}
-      />
+      <div className={`context-shell ${isContextOpen ? 'open' : ''}`}>
+        <div className="drawer-header mobile-only">
+          <span className="drawer-title">Research Context</span>
+          <button
+            className="icon-btn"
+            onClick={() => setIsContextOpen(false)}
+            title="Close context"
+          >
+            <X size={14} />
+          </button>
+        </div>
+        <ContextPanel
+          medicalContext={medicalContext}
+          lastQueryInfo={lastQueryInfo}
+        />
+      </div>
     </div>
   );
 }

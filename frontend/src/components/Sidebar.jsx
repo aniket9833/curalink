@@ -23,8 +23,18 @@ export default function Sidebar({
   onNewChat,
   onLoadChat,
   onDeleteChat,
-  ollamaStatus,
+  huggingFaceStatus,
 }) {
+  const statusTitle = huggingFaceStatus?.available
+    ? `Connected to ${huggingFaceStatus.currentModel || 'Hugging Face'}`
+    : huggingFaceStatus?.error || 'AI health check unavailable';
+
+  const statusLabel = huggingFaceStatus?.available
+    ? `AI: ${huggingFaceStatus.currentModel || 'Hugging Face'}`
+    : huggingFaceStatus?.error === 'HF_TOKEN not configured'
+      ? 'AI Offline - Check HF_TOKEN'
+      : 'AI Offline - Check backend / HF access';
+
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
@@ -100,13 +110,12 @@ export default function Sidebar({
 
       <div className="sidebar-footer">
         <div
-          className={`status-badge ${ollamaStatus?.available ? 'online' : 'offline'}`}
+          className={`status-badge ${huggingFaceStatus?.available ? 'online' : 'offline'}`}
+          title={statusTitle}
         >
           <div className="status-dot" />
           <Activity size={11} />
-          {ollamaStatus?.available
-            ? `AI: ${ollamaStatus.currentModel || 'llama3.2'}`
-            : 'AI Offline — Start Ollama'}
+          {statusLabel}
         </div>
       </div>
 

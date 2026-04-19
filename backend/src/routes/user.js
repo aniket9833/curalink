@@ -24,7 +24,7 @@ router.post('/session', async (req, res, next) => {
         medicalContext: context, 
         lastActive: new Date() 
       },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: 'after' },
     );
 
     logger.info('User session updated:', sid);

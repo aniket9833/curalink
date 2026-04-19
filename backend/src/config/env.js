@@ -4,17 +4,22 @@
  */
 
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const envPath = path.resolve(__dirname, '../../.env');
 
-const requiredEnvVars = ['MONGODB_URI'];
+dotenv.config({ path: envPath });
+
+const requiredEnvVars = ['MONGODB_URI', 'HF_TOKEN'];
 
 const optionalEnvVars = {
   PORT: 3000,
   NODE_ENV: 'development',
-  FRONTEND_URL: 'http://localhost:3000',
-  OLLAMA_BASE_URL: 'http://localhost:11434',
-  OLLAMA_MODEL: 'llama3.2',
+  FRONTEND_URL: 'http://localhost:5173',
+  HF_MODEL: 'meta-llama/Llama-3.1-8B-Instruct',
 };
 
 // Validate required env vars
@@ -34,9 +39,9 @@ export const config = {
   frontend: {
     url: process.env.FRONTEND_URL || optionalEnvVars.FRONTEND_URL,
   },
-  ollama: {
-    baseUrl: process.env.OLLAMA_BASE_URL || optionalEnvVars.OLLAMA_BASE_URL,
-    model: process.env.OLLAMA_MODEL || optionalEnvVars.OLLAMA_MODEL,
+  huggingFace: {
+    token: process.env.HF_TOKEN,
+    model: process.env.HF_MODEL || optionalEnvVars.HF_MODEL,
   },
   isDevelopment:
     (process.env.NODE_ENV || optionalEnvVars.NODE_ENV) === 'development',

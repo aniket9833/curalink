@@ -83,7 +83,7 @@ export async function setCached(query, disease, data) {
       },
       {
         upsert: true,
-        new: true,
+        returnDocument: 'after',
       },
     );
   } catch (err) {

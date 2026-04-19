@@ -20,7 +20,7 @@ export function useChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [pipelineStep, setPipelineStep] = useState('');
   const [error, setError] = useState(null);
-  const [ollamaStatus, setOllamaStatus] = useState(null);
+  const [huggingFaceStatus, setHuggingFaceStatus] = useState(null);
   const [medicalContext, setMedicalContext] = useState({});
   const [lastQueryInfo, setLastQueryInfo] = useState(null);
 
@@ -36,12 +36,20 @@ export function useChat() {
   ];
   const stepTimers = useRef([]);
 
-  // Check Ollama health on mount
+  // Check Hugging Face health on mount
   useEffect(() => {
     chatAPI
       .getHealth()
-      .then((r) => setOllamaStatus(r.data.ollama))
-      .catch(() => setOllamaStatus({ available: false }));
+      .then((r) => setHuggingFaceStatus(r.data.huggingface))
+      .catch((err) =>
+        setHuggingFaceStatus({
+          available: false,
+          error:
+            err.response?.data?.error ||
+            err.message ||
+            'Unable to reach backend health check',
+        }),
+      );
   }, []);
 
   // Load chat history
@@ -192,7 +200,7 @@ export function useChat() {
     isLoading,
     pipelineStep,
     error,
-    ollamaStatus,
+    huggingFaceStatus,
     medicalContext,
     setMedicalContext,
     lastQueryInfo,
