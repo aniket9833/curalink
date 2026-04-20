@@ -26,6 +26,99 @@ function buildSystemPrompt() {
   return LLM_CONFIG.systemPrompt;
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildEvidenceCatalog(snippets) {
+  return snippets.map((snippet, index) => {
+    const itemNumber =
+      snippets
+        .filter((s, i) => s.type === snippet.type && i <= index)
+        .length;
+
+    const label = snippet.type === 'trial'
+      ? `Trial ${itemNumber}`
+      : `Paper ${itemNumber}`;
+
+    return {
+      ...snippet,
+      label,
+      markdownLink: snippet.url ? `[${label}](${snippet.url})` : label,
+    };
+  });
+}
+
+function normalizeEvidenceKey(value) {
+  return value.toLowerCase().replace(/\s+/g, '');
+}
+
+function hyperlinkEvidenceReferences(content, snippets) {
+  if (!content) return content;
+
+  let linkedContent = content;
+  const catalog = buildEvidenceCatalog(snippets);
+
+  for (const item of catalog) {
+    if (!item.url) continue;
+
+    const variants = [
+      `\\[${escapeRegExp(item.label)}\\]`,
+      escapeRegExp(item.label),
+      escapeRegExp(item.label.replace(' ', '')),
+    ];
+
+    for (const variant of variants) {
+      const regex = new RegExp(
+        `(^|[^\\w\\]])(${variant})(?!\\]\\()(?=[^\\w]|$)`,
+        'gi',
+      );
+
+      linkedContent = linkedContent.replace(regex, (_, prefix) => {
+        return `${prefix}${item.markdownLink}`;
+      });
+    }
+  }
+
+  return linkedContent;
+}
+
+function appendEvidenceLinks(content, snippets) {
+  if (!content) return content;
+
+  const catalog = buildEvidenceCatalog(snippets);
+  const citedItems = catalog.filter((item) => {
+    const label = escapeRegExp(item.label);
+    const compactLabel = escapeRegExp(normalizeEvidenceKey(item.label));
+
+    return (
+      new RegExp(`\\[${label}\\]`, 'i').test(content) ||
+      new RegExp(`\\b${label}\\b`, 'i').test(content) ||
+      new RegExp(`\\b${compactLabel}\\b`, 'i').test(
+        normalizeEvidenceKey(content),
+      )
+    );
+  });
+
+  if (citedItems.length === 0) return content;
+
+  const evidenceSection = citedItems
+    .filter((item) => item.url)
+    .map((item) => {
+      const meta =
+        item.type === 'trial'
+          ? [item.status, item.phase].filter(Boolean).join(' | ')
+          : [item.source, item.year].filter(Boolean).join(', ');
+
+      return `- ${item.markdownLink}: ${item.title}${meta ? ` (${meta})` : ''}`;
+    })
+    .join('\n');
+
+  if (!evidenceSection) return content;
+
+  return `${content}\n\n## Evidence Links\n${evidenceSection}`;
+}
+
 export function buildUserPrompt(parsedQuery, snippets, conversationHistory) {
   const { originalQuery, disease, intents, patientName, location, isFollowUp } =
     parsedQuery;
@@ -86,7 +179,11 @@ ${pubsText || 'No publications retrieved for this query.'}
 RETRIEVED CLINICAL TRIALS (${snippets.filter((s) => s.type === 'trial').length} trials):
 ${trialsText || 'No clinical trials found for this query.'}
 
-Please provide a comprehensive, personalized, evidence-based response using ONLY the information provided above. Cite specific papers and trials by their numbers.`;
+Please provide a comprehensive, personalized, evidence-based response using ONLY the information provided above.
+- Cite evidence using the exact bracketed labels already shown above, such as [Paper 1] or [Trial 1]
+- Do not output bare labels like paper2, paper 2, trial1, or "study above"
+- Make the explanation feel tailored to this user context, not generic
+- If evidence is limited or mixed, say that clearly`;
 }
 
 /**
@@ -210,9 +307,12 @@ export async function generateResponse(
       systemPrompt,
       streamCallback,
     );
+    const linkedResponse = hyperlinkEvidenceReferences(response, snippets);
+    const enrichedResponse = appendEvidenceLinks(linkedResponse, snippets);
+
     return {
       success: true,
-      content: response,
+      content: enrichedResponse,
       model: getHuggingFaceConfig().model,
     };
   } catch (err) {

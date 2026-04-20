@@ -99,6 +99,11 @@ export default function Message({ message, chatTitle, onFollowUpSend }) {
                 ul: ({ children }) => <ul>{children}</ul>,
                 ol: ({ children }) => <ol>{children}</ol>,
                 li: ({ children }) => <li>{children}</li>,
+                a: ({ href, children }) => (
+                  <a href={href} target="_blank" rel="noopener noreferrer">
+                    {children}
+                  </a>
+                ),
                 code: ({ children }) => <code>{children}</code>,
                 blockquote: ({ children }) => (
                   <blockquote>{children}</blockquote>

@@ -150,7 +150,7 @@ export async function fetchOpenAlex(query, disease, maxResults = 100) {
           sort: 'relevance_score:desc',
           filter: 'from_publication_date:2018-01-01',
           select:
-            'id,title,abstract_inverted_index,authorships,publication_year,primary_location,cited_by_count,open_access',
+            'id,title,doi,ids,abstract_inverted_index,authorships,publication_year,primary_location,best_oa_location,cited_by_count,open_access',
         },
       });
 
@@ -177,13 +177,24 @@ export async function fetchOpenAlex(query, disease, maxResults = 100) {
           .filter(Boolean);
 
         const venue = work.primary_location?.source?.display_name || '';
+        const openAlexId = work.id?.split('/').pop();
+        const doiUrl =
+          typeof work.doi === 'string' && work.doi
+            ? work.doi.replace(/^http:/, 'https:')
+            : null;
+        const pmid =
+          work.ids?.pmid?.split('/').pop() || work.ids?.pmid || null;
         const url =
+          doiUrl ||
+          (pmid ? `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` : null) ||
+          work.best_oa_location?.landing_page_url ||
+          work.best_oa_location?.pdf_url ||
           work.primary_location?.landing_page_url ||
           work.open_access?.oa_url ||
-          `https://openalex.org/${work.id?.split('/').pop()}`;
+          `https://openalex.org/${openAlexId}`;
 
         results.push({
-          id: `oa_${work.id?.split('/').pop()}`,
+          id: `oa_${openAlexId}`,
           title: work.title || 'Untitled',
           abstract: abstract || 'Abstract not available.',
           authors,
@@ -191,6 +202,8 @@ export async function fetchOpenAlex(query, disease, maxResults = 100) {
           journal: venue,
           source: 'OpenAlex',
           url,
+          doi: doiUrl,
+          pmid: pmid ? String(pmid) : null,
           citationCount: work.cited_by_count || 0,
           openAccess: work.open_access?.is_oa || false,
         });
