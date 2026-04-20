@@ -36,10 +36,20 @@ export default function App() {
 
   const showWelcome = messages.length === 0 && !isLoading;
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+  // Auto scroll
+  const prevLength = useRef(messages.length);
 
+  useEffect(() => {
+    if (messages.length > prevLength.current) {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: 'smooth',
+      });
+    }
+
+    prevLength.current = messages.length;
+  }, [messages]);
+
+  // Welcome screen send
   const handleWelcomeSend = (query, ctx) => {
     if (ctx && Object.keys(ctx).length > 0) {
       setMedicalContext(ctx);
@@ -48,6 +58,7 @@ export default function App() {
     sendMessage(query, ctx && Object.keys(ctx).length > 0 ? ctx : null);
   };
 
+  // Export PDF
   const handleExportAll = () => {
     const lastAI = [...messages].reverse().find((m) => m.role === 'assistant');
 
@@ -62,25 +73,33 @@ export default function App() {
     }
   };
 
+  const handleNewChat = () => {
+    newChat();
+  };
+
   return (
     <div className="app">
-      {/* LEFT SIDEBAR */}
-      <Sidebar
-        chats={chats}
-        currentChatId={currentChatId}
-        onNewChat={newChat}
-        onLoadChat={loadChat}
-        onDeleteChat={deleteChat}
-        huggingFaceStatus={huggingFaceStatus}
-      />
+      {/* Sidebar always visible */}
+      <div className="sidebar-shell">
+        <Sidebar
+          chats={chats}
+          currentChatId={currentChatId}
+          onNewChat={handleNewChat}
+          onLoadChat={loadChat}
+          onDeleteChat={deleteChat}
+          huggingFaceStatus={huggingFaceStatus}
+        />
+      </div>
 
-      {/* MAIN */}
+      {/* Main */}
       <main className="main">
-        {/* HEADER */}
+        {/* Header */}
         <div className="chat-header">
-          <span className="chat-header-title">
-            {showWelcome ? 'Welcome to Curalink' : chatTitle}
-          </span>
+          <div className="header-leading">
+            <span className="chat-header-title">
+              {showWelcome ? 'Welcome to Curalink' : chatTitle}
+            </span>
+          </div>
 
           <div className="header-actions">
             {!showWelcome && messages.some((m) => m.role === 'assistant') && (
@@ -89,19 +108,24 @@ export default function App() {
                 onClick={handleExportAll}
                 title="Export session to PDF"
               >
-                <Download size={14} /> Export PDF
+                <Download size={14} />
+                Export PDF
               </button>
             )}
 
-            {/* {currentChatId && (
-              <button className="icon-btn" onClick={newChat} title="New Chat">
+            {currentChatId && (
+              <button
+                className="icon-btn"
+                onClick={handleNewChat}
+                title="New Chat"
+              >
                 <Trash2 size={14} />
               </button>
-            )} */}
+            )}
           </div>
         </div>
 
-        {/* CHAT AREA */}
+        {/* Messages */}
         <div className="messages-container">
           {showWelcome ? (
             <WelcomeScreen
@@ -153,7 +177,7 @@ export default function App() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* INPUT */}
+        {/* Input */}
         <ChatInput
           onSend={(msg) => sendMessage(msg)}
           isLoading={isLoading}
@@ -161,11 +185,13 @@ export default function App() {
         />
       </main>
 
-      {/* RIGHT CONTEXT PANEL (always visible desktop) */}
-      <ContextPanel
-        medicalContext={medicalContext}
-        lastQueryInfo={lastQueryInfo}
-      />
+      {/* Context panel always visible */}
+      <div className="context-shell">
+        <ContextPanel
+          medicalContext={medicalContext}
+          lastQueryInfo={lastQueryInfo}
+        />
+      </div>
     </div>
   );
 }
