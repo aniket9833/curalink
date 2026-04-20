@@ -22,7 +22,7 @@ export function setupApp() {
   // CORS configuration
   app.use(
     cors({
-      origin: config.frontend.url,
+      origin: true,
       credentials: true,
     }),
   );
